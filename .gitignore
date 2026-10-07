@@ -150,3 +150,11 @@ vite.config.ts.timestamp-*
 
 # AWS key
 *.pem
+
+# SQLite database and uploaded photos
+data/
+uploads/
+
+# Editor and assistant settings
+.nimbalyst/
+.claude/
