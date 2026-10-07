@@ -149,4 +149,4 @@ vite.config.ts.timestamp-*
 .turbo
 
 # AWS key
-.pem
+*.pem
