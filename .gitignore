@@ -148,6 +148,10 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
+# Next.js generated types and Vercel settings
+next-env.d.ts
+.vercel
+
 # AWS key
 *.pem
 

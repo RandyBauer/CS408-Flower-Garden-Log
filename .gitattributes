@@ -1,2 +1,5 @@
 # Shell scripts keep LF endings so they run on Linux, WSL, and Git Bash
 *.sh text eol=lf
+
+# Server config files are copied to Linux as-is; systemd rejects CRLF
+deploy/* text eol=lf
