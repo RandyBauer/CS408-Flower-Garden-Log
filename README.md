@@ -21,8 +21,9 @@ cd CS408-Flower-Garden-Log
 Open <http://localhost:3000>.
 
 `start.sh` checks for Node.js 22, installs dependencies, creates `.env` with a random session
-secret, builds the application, and starts it on port 3000. It is safe to run again. Set `PORT` to
-use another port: `PORT=3001 ./start.sh`.
+secret, creates the SQLite database at `data/gardenlog.db`, applies migrations, loads a sample
+garden on first run, builds the application, and starts it on port 3000. It is safe to run again.
+Set `PORT` to use another port: `PORT=3001 ./start.sh`.
 
 For development with hot reload, run `npm run dev`.
 
@@ -46,7 +47,13 @@ The `.pem` key stays outside the repository.
    ./deploy/deploy.sh -h <public-ip> -i <key.pem>
    ```
 
-3. Open `http://<public-ip>/`.
+3. Load the sample garden once, if the server should show it:
+
+   ```bash
+   ssh -i <key.pem> ubuntu@<public-ip> "cd /opt/gardenlog && npm run seed"
+   ```
+
+4. Open `http://<public-ip>/`.
 
 ## Scripts
 
@@ -60,13 +67,45 @@ The `.pem` key stays outside the repository.
 
 The server keeps `.env`, `data/`, and `uploads/` in `/opt/gardenlog` between deploys.
 
+## Database
+
+SQLite through better-sqlite3, stored in `data/gardenlog.db`. Set `DATABASE_PATH` to use another
+file.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run migrate` | Creates the database if needed and applies each pending file in `db/migrations/`, in name order. Applied files are recorded in `schema_migrations`. |
+| `npm run seed` | Loads the sample garden from `lib/sample-garden.ts`. Does nothing if the database already has zones. |
+
+## Tests
+
+| Command | Tool | Covers |
+| --- | --- | --- |
+| `npm test` | Vitest | Migrations on an empty database, schema constraints, and the sample garden. Each test uses a temporary database. |
+| `npm run test:e2e` | Playwright | Home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids return 404; `/api/health`. |
+
+`npm run test:e2e` builds the application and runs it on port 3100 against `data/e2e.db`, which is
+reset to the sample garden before each run. Install the browser once first:
+`npx playwright install chromium`.
+
+## Pages
+
+| Path | Page |
+| --- | --- |
+| `/` | Home: recent plantings and links to every section |
+| `/zones` | Zones, with bed and active planting counts |
+| `/zones/<id>` | Zone detail: each bed and what is planted in it now |
+| `/beds/<id>` | Bed detail: current plantings and past plantings with verdicts |
+
 ## Health check
 
-`GET /api/health` returns `200` with `{"status":"ok"}` while the application is running.
+`GET /api/health` returns `200` with `{"status":"ok"}` while the application is running and the
+migrated database opens, and `503` otherwise.
 
 ## Tech stack
 
-TypeScript, Next.js 16 (App Router), React 19, and Tailwind CSS 4 on Node.js 22. In production the
+TypeScript, Next.js 16 (App Router), React 19, Tailwind CSS 4, and SQLite (better-sqlite3) on
+Node.js 22. Tests use Vitest and Playwright. In production the
 application runs under systemd behind nginx on AWS EC2.
 
 ## License

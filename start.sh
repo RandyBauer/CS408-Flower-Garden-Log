@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs dependencies, builds Flower Garden Log, and starts it on port 3000.
+# Installs dependencies, sets up the database, builds Flower Garden Log, and starts it on port 3000.
 # Run from a fresh clone: ./start.sh
 # Safe to run again.
 set -euo pipefail
@@ -43,7 +43,12 @@ if [ ! -f .env ]; then
   echo "==> Created .env"
 fi
 
-# 4. Build and start
+# 4. Create the database, apply migrations, and load the sample garden into an empty database
+echo "==> Setting up the database"
+npm run migrate
+npm run seed
+
+# 5. Build and start
 echo "==> Building"
 npm run build
 

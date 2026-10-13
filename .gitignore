@@ -159,6 +159,10 @@ next-env.d.ts
 data/
 uploads/
 
+# Playwright output
+test-results/
+playwright-report/
+
 # Editor and assistant settings
 .nimbalyst/
 .claude/
