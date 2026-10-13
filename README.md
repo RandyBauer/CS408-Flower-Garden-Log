@@ -82,7 +82,7 @@ file.
 | Command | Tool | Covers |
 | --- | --- | --- |
 | `npm test` | Vitest | Migrations on an empty database, schema constraints, and the sample garden. Each test uses a temporary database. |
-| `npm run test:e2e` | Playwright | Home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids return 404; `/api/health`. |
+| `npm run test:e2e` | Playwright | Home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids show Page not found; `/api/health`. |
 
 `npm run test:e2e` builds the application and runs it on port 3100 against `data/e2e.db`, which is
 reset to the sample garden before each run. Install the browser once first:

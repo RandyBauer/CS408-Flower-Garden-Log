@@ -39,7 +39,7 @@ test("zones, zone detail, and bed detail show the sample garden", async ({ page 
   await expect(page).toHaveURL(/\/zones\/\d+$/);
 });
 
-test("unknown zone and bed ids return 404", async ({ page }) => {
+test("unknown zone and bed ids show Page not found", async ({ page }) => {
   for (const href of ["/zones/9999", "/beds/9999", "/beds/abc"]) {
     await page.goto(href);
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
