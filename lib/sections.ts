@@ -9,4 +9,11 @@ export const sections = [
     paths: ["/zones", "/beds"],
     description: "Areas of the garden, their beds, and what is planted in each.",
   },
+  {
+    href: "/plants",
+    label: "Plant library",
+    navLabel: "Library",
+    paths: ["/plants"],
+    description: "Every flower, variety, and color recorded, with the years each was grown.",
+  },
 ] as const;

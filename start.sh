@@ -43,10 +43,12 @@ if [ ! -f .env ]; then
   echo "==> Created .env"
 fi
 
-# 4. Create the database, apply migrations, and load the sample garden into an empty database
+# 4. Create the database, apply migrations, and load the sample garden and the demo account
+#    into an empty database
 echo "==> Setting up the database"
 npm run migrate
 npm run seed
+npm run gardener:demo
 
 # 5. Build and start
 echo "==> Building"
@@ -54,6 +56,8 @@ npm run build
 
 echo
 echo "==> Flower Garden Log is starting at http://localhost:${PORT}"
+# The demo account from lib/accounts.ts (DEMO_GARDENER)
+echo "    Sign in as demo@gardenlog.local with password plant-again-2026"
 echo "    Press Ctrl+C to stop."
 echo
 PORT="$PORT" exec npm start

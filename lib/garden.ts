@@ -5,9 +5,9 @@ import { getDb } from "./db";
 // awaits connection() first; otherwise Next.js would run the query once at build time and
 // serve that result to every request.
 
-export type Lifecycle = "annual" | "perennial";
-export type Verdict = "again" | "maybe" | "no";
-export type BedKind = "outdoor" | "rack";
+import type { BedKind, Lifecycle, Verdict } from "./validation";
+
+export type { BedKind, Lifecycle, Verdict };
 
 export interface ZoneSummary {
   id: number;
@@ -22,6 +22,7 @@ export interface Zone {
   id: number;
   name: string;
   description: string | null;
+  sortOrder: number;
 }
 
 export interface Bed {
@@ -32,11 +33,14 @@ export interface Bed {
   kind: BedKind;
   locationNote: string | null;
   publicSlug: string;
+  // Every planting recorded in the bed, current and past. A bed can be deleted only at 0.
+  plantingCount: number;
 }
 
 export interface Planting {
   id: number;
   bedId: number;
+  zoneId: number;
   bedName: string;
   flower: string;
   variety: string;
@@ -56,9 +60,10 @@ export interface BedWithPlantings extends Bed {
 }
 
 const BED_COLUMNS = `b.id, b.zone_id AS zoneId, z.name AS zoneName, b.name, b.kind,
-  b.location_note AS locationNote, b.public_slug AS publicSlug`;
+  b.location_note AS locationNote, b.public_slug AS publicSlug,
+  (SELECT COUNT(*) FROM plantings WHERE bed_id = b.id) AS plantingCount`;
 
-const PLANTING_COLUMNS = `p.id, p.bed_id AS bedId, b.name AS bedName, pl.flower, pl.variety,
+const PLANTING_COLUMNS = `p.id, p.bed_id AS bedId, b.zone_id AS zoneId, b.name AS bedName, pl.flower, pl.variety,
   pl.color, pl.lifecycle, p.planted_on AS plantedOn, p.removed_on AS removedOn, p.quantity,
   p.source, p.notes, p.verdict, p.verdict_note AS verdictNote`;
 
@@ -84,7 +89,7 @@ export async function listZones(): Promise<ZoneSummary[]> {
 export async function getZone(id: number): Promise<Zone | undefined> {
   await connection();
   return getDb()
-    .prepare("SELECT id, name, description FROM zones WHERE id = ?")
+    .prepare("SELECT id, name, description, sort_order AS sortOrder FROM zones WHERE id = ?")
     .get(id) as Zone | undefined;
 }
 
@@ -152,4 +157,96 @@ export async function listGrowingNow(limit = 6): Promise<Planting[]> {
       LIMIT ?`,
     )
     .all(limit) as Planting[];
+}
+
+export async function getPlanting(id: number): Promise<Planting | undefined> {
+  await connection();
+  return getDb()
+    .prepare(`SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM} WHERE p.id = ?`)
+    .get(id) as Planting | undefined;
+}
+
+export interface BedOption {
+  id: number;
+  name: string;
+  zoneName: string;
+}
+
+// Every bed, grouped by zone in display order, for the planting form's bed list.
+export async function listBedOptions(): Promise<BedOption[]> {
+  await connection();
+  return getDb()
+    .prepare(
+      `SELECT b.id, b.name, z.name AS zoneName FROM beds b JOIN zones z ON z.id = b.zone_id
+      ORDER BY z.sort_order, z.name, b.name`,
+    )
+    .all() as BedOption[];
+}
+
+export interface ZoneOption {
+  id: number;
+  name: string;
+}
+
+export async function listZoneOptions(): Promise<ZoneOption[]> {
+  await connection();
+  return getDb().prepare("SELECT id, name FROM zones ORDER BY sort_order, name").all() as ZoneOption[];
+}
+
+export interface Suggestions {
+  flowers: string[];
+  varieties: string[];
+  colors: string[];
+  sources: string[];
+}
+
+// Values entered before, offered as suggestions on the planting form.
+export async function listSuggestions(): Promise<Suggestions> {
+  await connection();
+  const db = getDb();
+  const distinct = (sql: string) => db.prepare(sql).pluck().all() as string[];
+  return {
+    flowers: distinct("SELECT DISTINCT flower FROM plants ORDER BY flower"),
+    varieties: distinct("SELECT DISTINCT variety FROM plants WHERE variety <> '' ORDER BY variety"),
+    colors: distinct("SELECT DISTINCT color FROM plants WHERE color <> '' ORDER BY color"),
+    sources: distinct(
+      "SELECT DISTINCT source FROM plantings WHERE source IS NOT NULL AND source <> '' ORDER BY source",
+    ),
+  };
+}
+
+export interface LibraryEntry {
+  id: number;
+  flower: string;
+  variety: string;
+  color: string;
+  lifecycle: Lifecycle;
+  plantingCount: number;
+  activeCount: number;
+  // Comma-separated years with a planting, oldest first: "2024,2025,2026"
+  years: string;
+  again: number;
+  maybe: number;
+  no: number;
+}
+
+// The plant library: each flower, variety, and color with a recorded planting.
+export async function listLibrary(): Promise<LibraryEntry[]> {
+  await connection();
+  return getDb()
+    .prepare(
+      `SELECT pl.id, pl.flower, pl.variety, pl.color, pl.lifecycle,
+        COUNT(p.id) AS plantingCount,
+        SUM(p.removed_on IS NULL) AS activeCount,
+        (SELECT GROUP_CONCAT(year, ',') FROM (
+          SELECT DISTINCT substr(planted_on, 1, 4) AS year FROM plantings
+          WHERE plant_id = pl.id ORDER BY year)) AS years,
+        SUM(p.verdict = 'again') AS again,
+        SUM(p.verdict = 'maybe') AS maybe,
+        SUM(p.verdict = 'no') AS no
+      FROM plants pl JOIN plantings p ON p.plant_id = pl.id
+      GROUP BY pl.id
+      ORDER BY pl.flower COLLATE NOCASE, pl.variety COLLATE NOCASE, pl.color COLLATE NOCASE`,
+    )
+    .all() as LibraryEntry[];
 }

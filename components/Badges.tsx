@@ -18,3 +18,10 @@ export function VerdictBadge({ verdict }: { verdict: Verdict | null }) {
   const { label, style } = VERDICTS[verdict];
   return <span className={`${pill} ${style}`}>{label}</span>;
 }
+
+// "2 again · 1 maybe" for the plant library.
+export function VerdictCounts({ again, maybe, no }: { again: number; maybe: number; no: number }) {
+  const parts = [again > 0 && `${again} again`, maybe > 0 && `${maybe} maybe`, no > 0 && `${no} would not`];
+  const text = parts.filter(Boolean).join(" · ");
+  return text ? <span>{text}</span> : <span className="text-stone-400">—</span>;
+}

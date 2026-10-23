@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { VerdictBadge } from "@/components/Badges";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Swatch } from "@/components/Swatch";
+import { primaryButton, secondaryButton } from "@/components/styles";
 import { formatDate, parseId, plantName, seasonLabel } from "@/lib/format";
 import { getBed, listCurrentPlantings, listPastPlantings } from "@/lib/garden";
+import { requireGardener } from "@/lib/session";
 
 export async function generateMetadata({ params }: PageProps<"/beds/[bedId]">): Promise<Metadata> {
   const id = parseId((await params).bedId);
@@ -26,7 +29,10 @@ const td = "px-4 py-2.5";
 const table =
   "mt-3 w-full border-collapse overflow-hidden rounded-md border border-stone-300 bg-white text-left text-sm";
 
+const editLink = `${secondaryButton} !px-3 !py-1`;
+
 async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
+  await requireGardener();
   const id = parseId((await params).bedId);
   const bed = id ? await getBed(id) : undefined;
   if (!bed) notFound();
@@ -41,11 +47,21 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
           { label: bed.name },
         ]}
       />
-      <h1 className="text-3xl font-semibold">{bed.name}</h1>
-      <p className="mt-1 text-stone-600">
-        {bed.kind === "rack" ? "Grow rack" : "Outdoor bed"}
-        {bed.locationNote && ` · ${bed.locationNote}`}
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold">{bed.name}</h1>
+          <p className="mt-1 text-stone-600">
+            {bed.kind === "rack" ? "Grow rack" : "Outdoor bed"}
+            {bed.locationNote && ` · ${bed.locationNote}`}
+          </p>
+        </div>
+        <Link href={`/beds/${bed.id}/edit`} className={secondaryButton}>
+          Edit bed
+        </Link>
+      </div>
+      <Link href={`/plantings/new?bed=${bed.id}`} className={`${primaryButton} mt-4 inline-block`}>
+        + Add planting
+      </Link>
 
       <section className="mt-8">
         <h2 className="text-xl font-semibold">Growing now</h2>
@@ -62,6 +78,9 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                 <th className={th}>Qty</th>
                 <th className={th}>Planted</th>
                 <th className={th}>Source</th>
+                <th className={th}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -81,6 +100,11 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                   <td className={td}>
                     {planting.source}
                     {planting.notes && <span className="block text-xs text-stone-500">{planting.notes}</span>}
+                  </td>
+                  <td className={`${td} text-right`}>
+                    <Link href={`/plantings/${planting.id}/edit`} className={editLink} aria-label={`Edit ${plantName(planting)}`}>
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}
@@ -102,6 +126,9 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                 <th className={th}>Source</th>
                 <th className={th}>Removed</th>
                 <th className={th}>Verdict</th>
+                <th className={th}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -122,6 +149,11 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                     {planting.verdictNote && (
                       <span className="ml-2 text-xs text-stone-500">{planting.verdictNote}</span>
                     )}
+                  </td>
+                  <td className={`${td} text-right`}>
+                    <Link href={`/plantings/${planting.id}/edit`} className={editLink} aria-label={`Edit ${plantName(planting)}`}>
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}

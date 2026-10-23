@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { AccountNav } from "@/components/AccountNav";
 import { NavLinks, NavList } from "@/components/NavLinks";
 import "./globals.css";
 
@@ -18,9 +19,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="text-xl font-semibold text-emerald-900">
               Flower Garden Log
             </Link>
-            <Suspense fallback={<NavList pathname={null} />}>
-              <NavLinks />
-            </Suspense>
+            <div className="flex items-center gap-5">
+              <Suspense fallback={<NavList pathname={null} />}>
+                <NavLinks />
+              </Suspense>
+              <Suspense fallback={null}>
+                <AccountNav />
+              </Suspense>
+            </div>
           </nav>
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>

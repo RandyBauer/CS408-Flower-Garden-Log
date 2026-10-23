@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // End-to-end tests run against a production build on port 3100 with its own database,
-// reset to the sample garden before each run.
+// reset to the sample garden and the demo account before each run.
 const PORT = 3100;
 const DATABASE_PATH = "data/e2e.db";
+export const STORAGE_STATE = "test-results/.auth/gardener.json";
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -15,7 +16,15 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Signs in once as the demo gardener and saves the cookie for the other tests.
+    { name: "sign-in", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
+      dependencies: ["sign-in"],
+    },
+  ],
   webServer: {
     command: `npx tsx scripts/reset-db.ts ${DATABASE_PATH} && npm run build && npx next start --port ${PORT}`,
     url: `http://localhost:${PORT}/api/health`,

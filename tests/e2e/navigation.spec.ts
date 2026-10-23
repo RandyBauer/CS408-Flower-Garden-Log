@@ -24,11 +24,11 @@ test("zones, zone detail, and bed detail show the sample garden", async ({ page 
   await page.getByRole("link", { name: "Zones", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Zones" })).toBeVisible();
 
-  await page.getByRole("link", { name: "South Fence" }).click();
+  await page.getByRole("link", { name: "South Fence", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "South Fence" })).toBeVisible();
   await expect(page.getByText("Peony · Sarah Bernhardt · pink")).toBeVisible();
 
-  await page.getByRole("link", { name: "Fence Border" }).click();
+  await page.getByRole("link", { name: "Fence Border", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Fence Border" })).toBeVisible();
   const growing = page.locator("section", { has: page.getByRole("heading", { name: "Growing now" }) });
   await expect(growing.getByRole("row")).toHaveCount(4); // header + 3 plantings

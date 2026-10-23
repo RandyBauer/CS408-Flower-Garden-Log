@@ -1,8 +1,10 @@
-// Deletes the database file named on the command line, then migrates and seeds a new one.
+// Deletes the database file named on the command line, then migrates and seeds a new one with
+// the sample garden and the demo account.
 // Used by the end-to-end tests: tsx scripts/reset-db.ts data/e2e.db
 // The path is required so the real database is never reset by accident.
 import fs from "node:fs";
 import path from "node:path";
+import { createDemoGardener } from "../lib/accounts";
 import { openDatabase } from "../lib/db";
 import { migrate } from "../lib/migrate";
 import { seedSampleGarden } from "../lib/sample-garden";
@@ -22,5 +24,6 @@ for (const suffix of ["", "-wal", "-shm"]) fs.rmSync(file + suffix, { force: tru
 const db = openDatabase(file);
 migrate(db);
 seedSampleGarden(db);
+createDemoGardener(db);
 db.close();
 console.log(`Reset ${file}`);
