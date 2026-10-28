@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 import { checkPassword } from "./accounts";
 import { getDb } from "./db";
 import type { FormState } from "./form-state";
-import { createPlanting, deletePlanting, endPlanting, updatePlanting } from "./plantings";
+import { createPlanting, deletePlanting, endPlanting, updatePlant, updatePlanting } from "./plantings";
 import { endSession, requireGardener, safeNextPath, startSession } from "./session";
-import { validateBed, validateEnd, validatePlanting, validateZone } from "./validation";
+import { validateBed, validateEnd, validatePlant, validatePlanting, validateZone } from "./validation";
 import { createBed, createZone, deleteBed, deleteZone, updateBed, updateZone } from "./zones";
 
 // Server actions for every form. Each one checks the session first, validates the form with the
@@ -69,6 +69,18 @@ export async function deletePlantingAction(id: number, bedId: number): Promise<F
   if (!deleted.ok) return { error: deleted.error };
   refreshPages();
   redirect(`/beds/${bedId}`);
+}
+
+// --- Plant library ---
+
+export async function savePlant(id: number, _prev: FormState, form: FormData): Promise<FormState> {
+  await requireGardener();
+  const result = validatePlant(form);
+  if (!result.ok) return { fieldErrors: result.errors };
+  const updated = updatePlant(getDb(), id, result.value);
+  if (!updated.ok) return { error: updated.error };
+  refreshPages();
+  redirect(`/plants/${updated.id}`);
 }
 
 // --- Zones ---

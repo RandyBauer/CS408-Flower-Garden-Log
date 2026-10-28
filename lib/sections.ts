@@ -16,4 +16,11 @@ export const sections = [
     paths: ["/plants"],
     description: "Every flower, variety, and color recorded, with the years each was grown.",
   },
+  {
+    href: "/search",
+    label: "Search",
+    navLabel: "Search",
+    paths: ["/search"],
+    description: "Find plantings by flower, color, bed, year, source, or verdict.",
+  },
 ] as const;

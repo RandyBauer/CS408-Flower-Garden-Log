@@ -176,3 +176,30 @@ export function validateBed(input: FormInput): Validated<BedInput> {
     value: { zoneId: Number(zoneId), name, kind: kind as BedKind, locationNote: locationNote || null },
   };
 }
+
+export interface PlantInput {
+  flower: string;
+  variety: string;
+  color: string;
+  lifecycle: Lifecycle;
+}
+
+// The "Edit entry" form on a plant detail page.
+export function validatePlant(input: FormInput): Validated<PlantInput> {
+  const errors: FieldErrors = {};
+  const flower = text(input, "flower");
+  const variety = text(input, "variety");
+  const color = text(input, "color");
+  const lifecycle = text(input, "lifecycle");
+
+  if (!flower) errors.flower = "Enter the flower, for example Zinnia.";
+  checkLength(errors, "flower", flower, "Flower", MAX_NAME);
+  checkLength(errors, "variety", variety, "Variety", MAX_NAME);
+  checkLength(errors, "color", color, "Color", MAX_NAME);
+  if (lifecycle !== "annual" && lifecycle !== "perennial") {
+    errors.lifecycle = "Choose annual or perennial.";
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { flower, variety, color, lifecycle: lifecycle as Lifecycle } };
+}

@@ -1,5 +1,5 @@
 import type { Db } from "./db";
-import type { EndInput, PlantingInput } from "./validation";
+import type { EndInput, PlantInput, PlantingInput } from "./validation";
 
 // Writes for plantings. Each function takes the database so the unit tests can pass a
 // temporary one. A planting is ended by setting its removal date, which keeps it in the bed's
@@ -38,6 +38,37 @@ function removePlantIfUnused(db: Db, plantId: number) {
   db.prepare(
     "DELETE FROM plants WHERE id = ? AND NOT EXISTS (SELECT 1 FROM plantings WHERE plant_id = ?)",
   ).run(plantId, plantId);
+}
+
+// Renames a library entry, which changes how every planting of it reads. When the new name
+// matches another entry, the two are combined: this entry's plantings move to the other one and
+// this entry is removed. Returns the id of the entry that holds the plantings afterwards.
+export function updatePlant(db: Db, id: number, input: PlantInput): { ok: true; id: number } | { ok: false; error: string } {
+  if (!db.prepare("SELECT 1 FROM plants WHERE id = ?").get(id)) {
+    return { ok: false, error: "That library entry no longer exists." };
+  }
+  const match = db
+    .prepare(
+      `SELECT id FROM plants
+      WHERE flower = ? COLLATE NOCASE AND variety = ? COLLATE NOCASE AND color = ? COLLATE NOCASE AND id <> ?`,
+    )
+    .pluck()
+    .get(input.flower, input.variety, input.color, id) as number | undefined;
+  const target = match ?? id;
+  db.transaction(() => {
+    if (match !== undefined) {
+      db.prepare("UPDATE plantings SET plant_id = ? WHERE plant_id = ?").run(match, id);
+      db.prepare("DELETE FROM plants WHERE id = ?").run(id);
+    }
+    db.prepare("UPDATE plants SET flower = ?, variety = ?, color = ?, lifecycle = ? WHERE id = ?").run(
+      input.flower,
+      input.variety,
+      input.color,
+      input.lifecycle,
+      target,
+    );
+  })();
+  return { ok: true, id: target };
 }
 
 function bedExists(db: Db, bedId: number): boolean {

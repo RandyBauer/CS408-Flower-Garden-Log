@@ -11,7 +11,7 @@ async function signIn(page: import("@playwright/test").Page, password = DEMO_GAR
 }
 
 test("signed-out visitors are redirected from gardener pages to Sign in", async ({ page }) => {
-  for (const path of ["/zones", "/zones/2", "/beds/4", "/plantings/new?bed=4", "/plants"]) {
+  for (const path of ["/zones", "/zones/2", "/beds/4", "/plantings/new?bed=4", "/plants", "/plants/1", "/search?color=coral"]) {
     await page.goto(path);
     await expect(page, path).toHaveURL(`/sign-in?next=${encodeURIComponent(path)}`);
     await expect(page.getByRole("heading", { name: "Gardener sign in" })).toBeVisible();

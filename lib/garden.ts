@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { getDb } from "./db";
+import { buildSearchQuery, type SearchFilters } from "./search";
 
 // Read queries for the zone and bed pages. better-sqlite3 is synchronous, so each function
 // awaits connection() first; otherwise Next.js would run the query once at build time and
@@ -39,6 +40,7 @@ export interface Bed {
 
 export interface Planting {
   id: number;
+  plantId: number;
   bedId: number;
   zoneId: number;
   bedName: string;
@@ -63,7 +65,7 @@ const BED_COLUMNS = `b.id, b.zone_id AS zoneId, z.name AS zoneName, b.name, b.ki
   b.location_note AS locationNote, b.public_slug AS publicSlug,
   (SELECT COUNT(*) FROM plantings WHERE bed_id = b.id) AS plantingCount`;
 
-const PLANTING_COLUMNS = `p.id, p.bed_id AS bedId, b.zone_id AS zoneId, b.name AS bedName, pl.flower, pl.variety,
+const PLANTING_COLUMNS = `p.id, p.plant_id AS plantId, p.bed_id AS bedId, b.zone_id AS zoneId, b.name AS bedName, pl.flower, pl.variety,
   pl.color, pl.lifecycle, p.planted_on AS plantedOn, p.removed_on AS removedOn, p.quantity,
   p.source, p.notes, p.verdict, p.verdict_note AS verdictNote`;
 
@@ -249,4 +251,90 @@ export async function listLibrary(): Promise<LibraryEntry[]> {
       ORDER BY pl.flower COLLATE NOCASE, pl.variety COLLATE NOCASE, pl.color COLLATE NOCASE`,
     )
     .all() as LibraryEntry[];
+}
+
+export interface Plant {
+  id: number;
+  flower: string;
+  variety: string;
+  color: string;
+  lifecycle: Lifecycle;
+}
+
+export async function getPlant(id: number): Promise<Plant | undefined> {
+  await connection();
+  return getDb()
+    .prepare("SELECT id, flower, variety, color, lifecycle FROM plants WHERE id = ?")
+    .get(id) as Plant | undefined;
+}
+
+// Every planting of one library entry, most recent first, for the plant detail page.
+export async function listPlantingsOfPlant(plantId: number): Promise<Planting[]> {
+  await connection();
+  return getDb()
+    .prepare(
+      `SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM}
+      WHERE p.plant_id = ?
+      ORDER BY p.planted_on DESC, p.id DESC`,
+    )
+    .all(plantId) as Planting[];
+}
+
+export interface SearchOptions {
+  zones: ZoneOption[];
+  beds: (BedOption & { zoneId: number })[];
+  // Years with something in the ground, newest first.
+  years: number[];
+  sources: string[];
+}
+
+// Choices for the search form's drop-down lists, taken from what has been recorded.
+export async function listSearchOptions(): Promise<SearchOptions> {
+  await connection();
+  const db = getDb();
+  const range = db
+    .prepare(
+      `SELECT MIN(substr(planted_on, 1, 4)) AS first,
+        MAX(CASE WHEN removed_on IS NULL THEN strftime('%Y', 'now') ELSE substr(removed_on, 1, 4) END) AS last
+      FROM plantings`,
+    )
+    .get() as { first: string | null; last: string | null };
+  const years: number[] = [];
+  if (range.first && range.last) {
+    for (let year = Number(range.last); year >= Number(range.first); year--) years.push(year);
+  }
+  return {
+    zones: db.prepare("SELECT id, name FROM zones ORDER BY sort_order, name").all() as ZoneOption[],
+    beds: db
+      .prepare(
+        `SELECT b.id, b.name, b.zone_id AS zoneId, z.name AS zoneName FROM beds b JOIN zones z ON z.id = b.zone_id
+        ORDER BY z.sort_order, z.name, b.name`,
+      )
+      .all() as SearchOptions["beds"],
+    years,
+    sources: db
+      .prepare(
+        `SELECT DISTINCT source FROM plantings WHERE source IS NOT NULL AND source <> ''
+        ORDER BY source COLLATE NOCASE`,
+      )
+      .pluck()
+      .all() as string[],
+  };
+}
+
+// Results are capped so a broad search stays readable; the page says when the cap is reached.
+export const SEARCH_LIMIT = 200;
+
+export async function searchPlantings(filters: SearchFilters): Promise<{ plantings: Planting[]; more: boolean }> {
+  await connection();
+  const { where, params } = buildSearchQuery(filters);
+  const rows = getDb()
+    .prepare(
+      `SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM}
+      WHERE ${where}
+      ORDER BY p.planted_on DESC, pl.flower COLLATE NOCASE, p.id DESC
+      LIMIT ?`,
+    )
+    .all(...params, SEARCH_LIMIT + 1) as Planting[];
+  return { plantings: rows.slice(0, SEARCH_LIMIT), more: rows.length > SEARCH_LIMIT };
 }

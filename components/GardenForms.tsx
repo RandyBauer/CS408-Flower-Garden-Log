@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { FormState } from "@/lib/form-state";
-import { validateBed, validateEnd, validateZone } from "@/lib/validation";
+import { validateBed, validateEnd, validatePlant, validateZone } from "@/lib/validation";
 import { Field, FormError, fieldProps, useFormAction } from "./forms";
 import { primaryButton, secondaryButton } from "./styles";
 
@@ -195,6 +195,50 @@ export function EndPlantingForm({ action, plantedOn }: { action: Action; planted
         <button type="submit" className={`${secondaryButton} sm:mt-6`} disabled={busy}>
           {pending ? "Ending…" : "End planting"}
         </button>
+      </div>
+    </form>
+  );
+}
+
+export interface PlantValues {
+  flower: string;
+  variety: string;
+  color: string;
+  lifecycle: string;
+}
+
+// Renames a plant library entry, for example to correct a misspelled variety on every planting.
+export function PlantForm({ action, initial }: { action: Action; initial: PlantValues }) {
+  const { error, fieldErrors, busy, pending, formProps } = useFormAction(action, validatePlant);
+  const props = (name: string) => fieldProps(name, fieldErrors);
+  return (
+    <form {...formProps} noValidate aria-label="Edit entry">
+      <FormError error={error} />
+      <div className="grid items-start gap-4 sm:grid-cols-4">
+        <Field name="flower" label="Flower" required error={fieldErrors.flower}>
+          <input {...props("flower")} defaultValue={initial.flower} />
+        </Field>
+        <Field name="variety" label="Variety" error={fieldErrors.variety}>
+          <input {...props("variety")} defaultValue={initial.variety} />
+        </Field>
+        <Field name="color" label="Color" error={fieldErrors.color}>
+          <input {...props("color")} defaultValue={initial.color} />
+        </Field>
+        <Field name="lifecycle" label="Type" error={fieldErrors.lifecycle}>
+          <select {...props("lifecycle")} defaultValue={initial.lifecycle}>
+            <option value="annual">Annual</option>
+            <option value="perennial">Perennial</option>
+          </select>
+        </Field>
+      </div>
+      <div className="mt-4 flex items-center gap-4">
+        <button type="submit" className={primaryButton} disabled={busy}>
+          {pending ? "Saving…" : "Save"}
+        </button>
+        <p className="text-sm text-stone-500">
+          Changes every planting of this entry. If another entry already has the same flower, variety, and
+          color, the two are combined.
+        </p>
       </div>
     </form>
   );

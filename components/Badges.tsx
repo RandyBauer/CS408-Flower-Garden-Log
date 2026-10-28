@@ -1,6 +1,6 @@
 import type { Lifecycle, Verdict } from "@/lib/garden";
 
-const pill = "inline-block rounded-full border px-2 py-0.5 text-xs leading-none";
+const pill = "inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs leading-none";
 
 export function LifecycleBadge({ lifecycle }: { lifecycle: Lifecycle }) {
   if (lifecycle !== "perennial") return null;

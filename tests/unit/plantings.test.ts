@@ -4,8 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDatabase, type Db } from "@/lib/db";
 import { migrate } from "@/lib/migrate";
-import { createPlanting, deletePlanting, endPlanting, updatePlanting } from "@/lib/plantings";
-import { validateEnd, validatePlanting, type PlantingInput } from "@/lib/validation";
+import { createPlanting, deletePlanting, endPlanting, updatePlant, updatePlanting } from "@/lib/plantings";
+import { validateEnd, validatePlant, validatePlanting, type PlantingInput } from "@/lib/validation";
 
 let dir: string;
 let db: Db;
@@ -135,6 +135,55 @@ describe("plant library", () => {
     expect(updatePlanting(db, created.id, valid({ color: "white" }))).toEqual({ ok: true });
 
     expect(db.prepare("SELECT color FROM plants").pluck().all()).toEqual(["white"]);
+  });
+});
+
+describe("editing a library entry", () => {
+  const entry = { flower: "Zinnia", variety: "Profusion Orange", color: "orange", lifecycle: "annual" as const };
+  const plantOf = (plantingId: number) =>
+    db.prepare("SELECT plant_id FROM plantings WHERE id = ?").pluck().get(plantingId) as number;
+
+  it("requires a flower and a type", () => {
+    const result = validatePlant({ flower: " ", variety: "x", color: "", lifecycle: "shrub" });
+    expect(result.ok ? {} : result.errors).toEqual({
+      flower: "Enter the flower, for example Zinnia.",
+      lifecycle: "Choose annual or perennial.",
+    });
+  });
+
+  it("renames the entry for every planting of it", () => {
+    const a = createPlanting(db, valid({ variety: "Profusion Orang" }));
+    const b = createPlanting(db, valid({ variety: "Profusion Orang", bed_id: "2" }));
+    if (!a.ok || !b.ok) throw new Error("not created");
+    const plantId = plantOf(a.id);
+
+    expect(updatePlant(db, plantId, entry)).toEqual({ ok: true, id: plantId });
+
+    expect(db.prepare("SELECT variety FROM plants").pluck().all()).toEqual(["Profusion Orange"]);
+    expect(plantOf(b.id)).toBe(plantId);
+  });
+
+  it("combines the entry with another that has the same flower, variety, and color", () => {
+    const right = createPlanting(db, valid());
+    const typo = createPlanting(db, valid({ variety: "Profusion Orang", bed_id: "2" }));
+    if (!right.ok || !typo.ok) throw new Error("not created");
+    const keep = plantOf(right.id);
+
+    expect(updatePlant(db, plantOf(typo.id), { ...entry, variety: "profusion orange", lifecycle: "perennial" })).toEqual({
+      ok: true,
+      id: keep,
+    });
+
+    expect(count("SELECT COUNT(*) FROM plants")).toBe(1);
+    expect(plantOf(typo.id)).toBe(keep);
+    expect(db.prepare("SELECT variety, lifecycle FROM plants").get()).toEqual({
+      variety: "profusion orange",
+      lifecycle: "perennial",
+    });
+  });
+
+  it("reports an entry that no longer exists", () => {
+    expect(updatePlant(db, 999, entry)).toEqual({ ok: false, error: "That library entry no longer exists." });
   });
 });
 
