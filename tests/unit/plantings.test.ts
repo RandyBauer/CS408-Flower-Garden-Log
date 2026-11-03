@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDatabase, type Db } from "@/lib/db";
 import { migrate } from "@/lib/migrate";
+import { thumbName } from "@/lib/photos";
 import { createPlanting, deletePlanting, endPlanting, updatePlant, updatePlanting } from "@/lib/plantings";
 import { validateEnd, validatePlant, validatePlanting, type PlantingInput } from "@/lib/validation";
 
@@ -259,5 +260,91 @@ describe("ending versus deleting", () => {
       quantity: 6,
       removed_on: null,
     });
+  });
+});
+
+describe("tag photos", () => {
+  const OLD = `${"a".repeat(32)}.jpg`;
+  const NEW = `${"b".repeat(32)}.jpg`;
+  let uploads: string;
+
+  // Stands in for storePhoto: the two files a stored photo has.
+  function storeFiles(name: string) {
+    fs.writeFileSync(path.join(uploads, name), "full");
+    fs.writeFileSync(path.join(uploads, thumbName(name)), "thumb");
+  }
+
+  beforeEach(() => {
+    uploads = path.join(dir, "uploads");
+    fs.mkdirSync(uploads);
+    process.env.UPLOADS_DIR = uploads;
+  });
+
+  afterEach(() => {
+    delete process.env.UPLOADS_DIR;
+  });
+
+  const tagPhotos = (plantingId: number) =>
+    db.prepare("SELECT storage_path, taken_on FROM photos WHERE planting_id = ? AND kind = 'tag'").all(plantingId);
+
+  function plantWithPhoto(name: string) {
+    storeFiles(name);
+    const created = createPlanting(db, valid(), { storagePath: name, takenOn: "2026-05-18" });
+    if (!created.ok) throw new Error(created.error);
+    return created.id;
+  }
+
+  it("attaches a tag photo when the planting is created", () => {
+    const id = plantWithPhoto(OLD);
+
+    expect(tagPhotos(id)).toEqual([{ storage_path: OLD, taken_on: "2026-05-18" }]);
+  });
+
+  it("keeps the photo when the planting is saved without a change to it", () => {
+    const id = plantWithPhoto(OLD);
+
+    updatePlanting(db, id, valid({ quantity: "6" }));
+
+    expect(tagPhotos(id)).toEqual([{ storage_path: OLD, taken_on: "2026-05-18" }]);
+    expect(fs.readdirSync(uploads)).toHaveLength(2);
+  });
+
+  it("replacing the photo deletes the old one's files", () => {
+    const id = plantWithPhoto(OLD);
+    storeFiles(NEW);
+
+    expect(updatePlanting(db, id, valid(), { storagePath: NEW, takenOn: "2026-06-02" })).toEqual({ ok: true });
+
+    expect(tagPhotos(id)).toEqual([{ storage_path: NEW, taken_on: "2026-06-02" }]);
+    expect(fs.readdirSync(uploads).sort()).toEqual([NEW, thumbName(NEW)].sort());
+  });
+
+  it("removing the photo deletes its row and files", () => {
+    const id = plantWithPhoto(OLD);
+
+    updatePlanting(db, id, valid(), "remove");
+
+    expect(tagPhotos(id)).toEqual([]);
+    expect(fs.readdirSync(uploads)).toEqual([]);
+  });
+
+  it("deleting the planting deletes its photo files", () => {
+    const id = plantWithPhoto(OLD);
+
+    expect(deletePlanting(db, id)).toEqual({ ok: true });
+
+    expect(count("SELECT COUNT(*) FROM photos")).toBe(0);
+    expect(fs.readdirSync(uploads)).toEqual([]);
+  });
+
+  it("allows one tag photo per planting", () => {
+    const id = plantWithPhoto(OLD);
+
+    expect(() =>
+      db.prepare("INSERT INTO photos (planting_id, kind, storage_path) VALUES (?, 'tag', ?)").run(id, NEW),
+    ).toThrow(/UNIQUE/);
+    expect(() =>
+      db.prepare("INSERT INTO photos (planting_id, kind, storage_path) VALUES (?, 'plant', ?)").run(id, NEW),
+    ).not.toThrow();
   });
 });

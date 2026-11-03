@@ -1,26 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-// Each test adds its own zone and bed, so tests running in parallel and the sample garden's
-// own checks do not see each other's plantings.
-
-const section = (page: Page, heading: string) =>
-  page.locator("section", { has: page.getByRole("heading", { level: 2, name: heading }) });
-
-async function addZoneAndBed(page: Page, name: string) {
-  await page.goto("/zones");
-  const addZone = page.getByRole("form", { name: "Add zone" });
-  await addZone.getByLabel("Name").fill(`${name} Zone`);
-  await addZone.getByLabel("Description").fill("Added by the end-to-end tests.");
-  await addZone.getByRole("button", { name: "Add zone" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: `${name} Zone` })).toBeVisible();
-
-  const addBed = page.getByRole("form", { name: "Add bed" });
-  await addBed.getByLabel("Name").fill(`${name} Bed`);
-  await addBed.getByLabel("Location note").fill("by the gate");
-  await addBed.getByRole("button", { name: "Add bed" }).click();
-  await page.getByRole("link", { name: `${name} Bed`, exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: `${name} Bed` })).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import { addZoneAndBed, section } from "./garden";
 
 test("create, edit, end, and delete a planting", async ({ page }) => {
   const run = `Test ${Date.now()}`;
@@ -42,7 +21,7 @@ test("create, edit, end, and delete a planting", async ({ page }) => {
   const growing = section(page, "Growing now");
   const row = growing.getByRole("row", { name: new RegExp(run) });
   await expect(row).toContainText("Fred Meyer");
-  await expect(row.getByRole("cell").nth(4)).toHaveText("6");
+  await expect(row.getByRole("cell").nth(5)).toHaveText("6");
 
   // The plant library gains the new entry
   await page.goto("/plants");
@@ -54,7 +33,7 @@ test("create, edit, end, and delete a planting", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Edit planting" })).toBeVisible();
   await page.getByRole("form", { name: "Planting" }).getByLabel("Quantity").fill("8");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(growing.getByRole("row", { name: new RegExp(run) }).getByRole("cell").nth(4)).toHaveText("8");
+  await expect(growing.getByRole("row", { name: new RegExp(run) }).getByRole("cell").nth(5)).toHaveText("8");
 
   // End: leaves Growing now and stays in History with its verdict
   await growing.getByRole("link", { name: `Edit Zinnia · ${run} · orange` }).click();

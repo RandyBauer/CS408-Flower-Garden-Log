@@ -1,4 +1,5 @@
 import type { Db } from "./db";
+import { deletePhotoFiles } from "./photos";
 import type { EndInput, PlantInput, PlantingInput } from "./validation";
 
 // Writes for plantings. Each function takes the database so the unit tests can pass a
@@ -75,22 +76,52 @@ function bedExists(db: Db, bedId: number): boolean {
   return db.prepare("SELECT 1 FROM beds WHERE id = ?").get(bedId) !== undefined;
 }
 
-export function createPlanting(db: Db, input: PlantingInput): { ok: true; id: number } | { ok: false; error: string } {
+// What saving the planting form does to its tag photo: attach a photo already stored with
+// storePhoto, replacing the current one; remove the current one; or leave it as it is.
+export type TagPhotoChange = { storagePath: string; takenOn: string | null } | "remove" | null;
+
+// Applies a tag photo change inside the caller's transaction. Returns the photo it replaced or
+// removed, whose files are deleted once the transaction has committed.
+function changeTagPhoto(db: Db, plantingId: number, change: TagPhotoChange): string[] {
+  if (change === null) return [];
+  const replaced = db
+    .prepare("SELECT storage_path FROM photos WHERE planting_id = ? AND kind = 'tag'")
+    .pluck()
+    .all(plantingId) as string[];
+  db.prepare("DELETE FROM photos WHERE planting_id = ? AND kind = 'tag'").run(plantingId);
+  if (change !== "remove") {
+    db.prepare("INSERT INTO photos (planting_id, kind, storage_path, taken_on) VALUES (?, 'tag', ?, ?)").run(
+      plantingId,
+      change.storagePath,
+      change.takenOn,
+    );
+  }
+  return replaced;
+}
+
+export function createPlanting(
+  db: Db,
+  input: PlantingInput,
+  tagPhoto: TagPhotoChange = null,
+): { ok: true; id: number } | { ok: false; error: string } {
   if (!bedExists(db, input.bedId)) return { ok: false, error: "That bed no longer exists." };
   return db.transaction(() => {
     const plantId = findOrCreatePlant(db, input);
-    const id = db
-      .prepare(
-        `INSERT INTO plantings (bed_id, plant_id, planted_on, removed_on, quantity, source, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(input.bedId, plantId, input.plantedOn, input.removedOn, input.quantity, input.source, input.notes)
-      .lastInsertRowid;
-    return { ok: true as const, id: Number(id) };
+    const id = Number(
+      db
+        .prepare(
+          `INSERT INTO plantings (bed_id, plant_id, planted_on, removed_on, quantity, source, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(input.bedId, plantId, input.plantedOn, input.removedOn, input.quantity, input.source, input.notes)
+        .lastInsertRowid,
+    );
+    changeTagPhoto(db, id, tagPhoto);
+    return { ok: true as const, id };
   })();
 }
 
-export function updatePlanting(db: Db, id: number, input: PlantingInput): Result {
+export function updatePlanting(db: Db, id: number, input: PlantingInput, tagPhoto: TagPhotoChange = null): Result {
   const current = db.prepare("SELECT plant_id AS plantId, removed_on AS removedOn FROM plantings WHERE id = ?").get(id) as
     | { plantId: number; removedOn: string | null }
     | undefined;
@@ -102,7 +133,7 @@ export function updatePlanting(db: Db, id: number, input: PlantingInput): Result
     return { ok: false, error: "The removal date cannot be before the date planted." };
   }
 
-  db.transaction(() => {
+  const replaced = db.transaction(() => {
     const plantId = findOrCreatePlant(db, input);
     db.prepare(
       `UPDATE plantings SET bed_id = ?, plant_id = ?, planted_on = ?, removed_on = ?, quantity = ?,
@@ -110,7 +141,9 @@ export function updatePlanting(db: Db, id: number, input: PlantingInput): Result
       WHERE id = ?`,
     ).run(input.bedId, plantId, input.plantedOn, removedOn, input.quantity, input.source, input.notes, id);
     if (plantId !== current.plantId) removePlantIfUnused(db, current.plantId);
+    return changeTagPhoto(db, id, tagPhoto);
   })();
+  deletePhotoFiles(replaced);
   return { ok: true };
 }
 
@@ -133,18 +166,20 @@ export function endPlanting(db: Db, id: number, input: EndInput): Result {
   return { ok: true };
 }
 
-// Deletes a planting permanently, with its photos. A transplant that came from it keeps its own
-// record but loses the link. The library entry goes too if nothing else refers to it.
+// Deletes a planting permanently, with its photos and their files. A transplant that came from it
+// keeps its own record but loses the link. The library entry goes too if nothing else refers to it.
 export function deletePlanting(db: Db, id: number): Result {
   const planting = db.prepare("SELECT plant_id AS plantId FROM plantings WHERE id = ?").get(id) as
     | { plantId: number }
     | undefined;
   if (!planting) return { ok: false, error: "That planting no longer exists." };
+  const photos = db.prepare("SELECT storage_path FROM photos WHERE planting_id = ?").pluck().all(id) as string[];
   db.transaction(() => {
     db.prepare("UPDATE plantings SET from_planting_id = NULL WHERE from_planting_id = ?").run(id);
     db.prepare("DELETE FROM photos WHERE planting_id = ?").run(id);
     db.prepare("DELETE FROM plantings WHERE id = ?").run(id);
     removePlantIfUnused(db, planting.plantId);
   })();
+  deletePhotoFiles(photos);
   return { ok: true };
 }

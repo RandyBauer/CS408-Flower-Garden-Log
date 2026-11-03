@@ -74,7 +74,7 @@ The demo account is not created on the server.
 | `start.sh` | Any Linux machine | Installs dependencies, builds, and starts the application on port 3000. |
 | `deploy/setup-ec2.sh` | Server, once, with sudo | Updates Ubuntu, adds a 2 GB swap file, installs Node.js 22, nginx, rsync, and sqlite3, creates `/opt/gardenlog` and its `.env`, installs the nginx site and systemd service, and allows ports 22 and 80 in `ufw`. |
 | `deploy/gardenlog.service` | Server | systemd unit. Runs `npm start` in `/opt/gardenlog`, starts on boot, and restarts after a crash. |
-| `deploy/nginx-gardenlog.conf` | Server | Forwards port 80 to port 3000 and allows 10 MB uploads. |
+| `deploy/nginx-gardenlog.conf` | Server | Forwards port 80 to port 3000 and allows 12 MB requests: a 10 MB photo and the rest of the planting form. `setup-ec2.sh` installs it; run `setup-ec2.sh` again after changing it. |
 | `deploy/deploy.sh` | Laptop | Runs the unit tests, copies the code to `/opt/gardenlog`, installs dependencies, builds, restarts the service, and checks `/api/health`. Copies with rsync, or with tar over ssh where rsync is not installed. |
 
 The server keeps `.env`, `data/`, and `uploads/` in `/opt/gardenlog` between deploys.
@@ -95,12 +95,12 @@ file.
 
 | Command | Tool | Covers |
 | --- | --- | --- |
-| `npm test` | Vitest | Unit tests: migrations, schema constraints, and the sample garden; planting, zone, and bed validation; ending versus deleting a planting; the plant library; zone and bed delete rules; passwords and sessions. Each test uses a temporary database. Component test (React Testing Library): the planting form rejects invalid entries in the browser and submits valid ones. |
-| `npm run test:e2e` | Playwright | Sign-in, wrong password, sign-out, and signed-out redirects; creating, editing, ending, and deleting a planting; an invalid planting rejected; creating and deleting a zone and bed; home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids show Page not found; `/api/health`. |
+| `npm test` | Vitest | Unit tests: migrations, schema constraints, and the sample garden; planting, zone, and bed validation; ending versus deleting a planting; the plant library; zone and bed delete rules; passwords and sessions; the search query builder for each filter; which years a planting was in the ground, checked against the search year filter; photo resizing, rotation, and metadata removal; attaching, replacing, and removing tag photos. Each test uses a temporary database. Component tests (React Testing Library): the planting form rejects invalid entries and files that are not photos in the browser and submits valid ones; the search form. |
+| `npm run test:e2e` | Playwright | Sign-in, wrong password, sign-out, and signed-out redirects; creating, editing, ending, and deleting a planting; an invalid planting rejected; creating and deleting a zone and bed; home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids show Page not found; `/api/health`; example searches and the search form; the plant library and plant detail; attaching a 5 MB tag photo and finding it, resized, in the bed's history; replacing and removing a tag photo; a file that is not a photo rejected. |
 
-`npm run test:e2e` builds the application and runs it on port 3100 against `data/e2e.db`, which is
-reset to the sample garden and the demo account before each run. Install the browser once first:
-`npx playwright install chromium`.
+`npm run test:e2e` builds the application and runs it on port 3100 against `data/e2e.db` and the
+photo folder `data/e2e-uploads`, which are reset to the sample garden and the demo account before
+each run. Install the browser once first: `npx playwright install chromium`.
 
 ## Pages
 
@@ -111,14 +111,29 @@ reset to the sample garden and the demo account before each run. Install the bro
 | `/zones` | Zones, with bed and active planting counts; add, edit, and delete zones |
 | `/zones/<id>` | Zone detail: each bed and what is planted in it now; add, edit, and delete beds |
 | `/zones/<id>/edit` | Edit a zone |
-| `/beds/<id>` | Bed detail: current plantings and past plantings with verdicts |
+| `/beds/<id>` | Bed detail: current plantings, and past plantings grouped by year with verdicts and tag photos |
 | `/beds/<id>/edit` | Edit a bed or move it to another zone |
-| `/plantings/new?bed=<id>` | Add a planting |
-| `/plantings/<id>/edit` | Edit, end, or delete a planting |
+| `/plantings/new?bed=<id>` | Add a planting, with an optional tag photo |
+| `/plantings/<id>/edit` | Edit, end, or delete a planting; attach, replace, or remove its tag photo |
 | `/plants` | Plant library: each flower, variety, and color recorded, with seasons and verdicts |
+| `/plants/<id>` | Plant detail: every planting of one library entry; rename the entry |
+| `/search` | Search plantings by any combination of filters; example searches when no filter is set |
+| `/photos/<file>` | A stored photo |
 
-Home and Sign in are public. Every other page requires sign-in; a signed-out visitor is redirected
-to Sign in and returned to the page afterward.
+Home, Sign in, and photo files are public. Every other page requires sign-in; a signed-out
+visitor is redirected to Sign in and returned to the page afterward.
+
+## Photos
+
+The planting form attaches one plant tag photo to a planting: JPEG, PNG, or WebP, up to 10 MB.
+The server decodes each upload with sharp and rejects anything that is not one of those formats.
+It turns the photo upright, removes its metadata, including any GPS position, and stores two JPEG
+files in `uploads/` under a random 32-character name: the photo at 1600 pixels on the long edge
+and a 400-pixel thumbnail. The `photos` table holds the file name. Replacing or removing a photo,
+or deleting its planting, deletes both files. Set `UPLOADS_DIR` to use another folder.
+
+The bed page lists past plantings under each year they were in the ground, the same rule the
+search page's year filter uses. A planting without a photo shows a swatch of its recorded color.
 
 ## Sign-in
 
@@ -135,8 +150,8 @@ migrated database opens, and `503` otherwise.
 ## Tech stack
 
 TypeScript, Next.js 16 (App Router), React 19, Tailwind CSS 4, and SQLite (better-sqlite3) on
-Node.js 22. Passwords use bcryptjs. Tests use Vitest, React Testing Library, and Playwright. In production the
-application runs under systemd behind nginx on AWS EC2.
+Node.js 22. Passwords use bcryptjs. Photos are resized with sharp. Tests use Vitest, React Testing
+Library, and Playwright. In production the application runs under systemd behind nginx on AWS EC2.
 
 ## License
 

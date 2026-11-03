@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// End-to-end tests run against a production build on port 3100 with its own database,
-// reset to the sample garden and the demo account before each run.
+// End-to-end tests run against a production build on port 3100 with their own database and
+// photo folder, reset to the sample garden and the demo account before each run.
 const PORT = 3100;
 const DATABASE_PATH = "data/e2e.db";
+const UPLOADS_DIR = "data/e2e-uploads";
 export const STORAGE_STATE = "test-results/.auth/gardener.json";
 
 export default defineConfig({
@@ -26,9 +27,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npx tsx scripts/reset-db.ts ${DATABASE_PATH} && npm run build && npx next start --port ${PORT}`,
+    command: `npx tsx scripts/reset-db.ts ${DATABASE_PATH} ${UPLOADS_DIR} && npm run build && npx next start --port ${PORT}`,
     url: `http://localhost:${PORT}/api/health`,
-    env: { DATABASE_PATH },
+    env: { DATABASE_PATH, UPLOADS_DIR },
     reuseExistingServer: false,
     timeout: 180_000,
   },

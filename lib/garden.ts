@@ -55,6 +55,9 @@ export interface Planting {
   notes: string | null;
   verdict: Verdict | null;
   verdictNote: string | null;
+  // The tag photo's photos.storage_path and date, or null when there is none.
+  tagPhoto: string | null;
+  tagPhotoTakenOn: string | null;
 }
 
 export interface BedWithPlantings extends Bed {
@@ -67,11 +70,14 @@ const BED_COLUMNS = `b.id, b.zone_id AS zoneId, z.name AS zoneName, b.name, b.ki
 
 const PLANTING_COLUMNS = `p.id, p.plant_id AS plantId, p.bed_id AS bedId, b.zone_id AS zoneId, b.name AS bedName, pl.flower, pl.variety,
   pl.color, pl.lifecycle, p.planted_on AS plantedOn, p.removed_on AS removedOn, p.quantity,
-  p.source, p.notes, p.verdict, p.verdict_note AS verdictNote`;
+  p.source, p.notes, p.verdict, p.verdict_note AS verdictNote,
+  ph.storage_path AS tagPhoto, ph.taken_on AS tagPhotoTakenOn`;
 
+// A planting has at most one tag photo (a unique index), so the photo join adds no rows.
 const PLANTING_FROM = `plantings p
   JOIN plants pl ON pl.id = p.plant_id
-  JOIN beds b ON b.id = p.bed_id`;
+  JOIN beds b ON b.id = p.bed_id
+  LEFT JOIN photos ph ON ph.planting_id = p.id AND ph.kind = 'tag'`;
 
 export async function listZones(): Promise<ZoneSummary[]> {
   await connection();
@@ -136,14 +142,14 @@ export async function listCurrentPlantings(bedId: number): Promise<Planting[]> {
     .all(bedId) as Planting[];
 }
 
-// Ended plantings, most recent first.
+// Ended plantings in the order they were planted, for the bed's history by year.
 export async function listPastPlantings(bedId: number): Promise<Planting[]> {
   await connection();
   return getDb()
     .prepare(
       `SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM}
       WHERE p.bed_id = ? AND p.removed_on IS NOT NULL
-      ORDER BY p.removed_on DESC, pl.flower`,
+      ORDER BY p.planted_on, pl.flower COLLATE NOCASE, p.id`,
     )
     .all(bedId) as Planting[];
 }

@@ -29,7 +29,7 @@ describe("migrate", () => {
   it("creates every table on an empty database", () => {
     expect(tables()).toEqual([]);
 
-    expect(migrate(db)).toEqual(["001_initial.sql"]);
+    expect(migrate(db)).toEqual(["001_initial.sql", "002_photo_indexes.sql"]);
 
     expect(tables()).toEqual([
       "beds", "photos", "plantings", "plants", "schema_migrations", "sessions", "users", "zones",

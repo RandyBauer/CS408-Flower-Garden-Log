@@ -8,6 +8,7 @@ import { DeleteButton } from "@/components/forms";
 import { deletePlantingAction, endPlantingAction, savePlanting } from "@/lib/actions";
 import { formatDate, parseId, plantName } from "@/lib/format";
 import { getPlanting, listBedOptions, listSuggestions } from "@/lib/garden";
+import { photoUrl } from "@/lib/photos";
 import { requireGardener } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Edit planting" };
@@ -59,6 +60,14 @@ async function EditPlanting({ params }: { params: Promise<{ plantingId: string }
           source: planting.source ?? "",
           notes: planting.notes ?? "",
         }}
+        photo={
+          planting.tagPhoto
+            ? {
+                url: photoUrl(planting.tagPhoto),
+                added: planting.tagPhotoTakenOn ? formatDate(planting.tagPhotoTakenOn) : null,
+              }
+            : null
+        }
         submitLabel="Save"
         cancelHref={`/beds/${planting.bedId}`}
       />

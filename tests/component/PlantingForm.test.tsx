@@ -3,7 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PlantingForm, type PlantingValues } from "@/components/PlantingForm";
+import { PlantingForm, type CurrentPhoto, type PlantingValues } from "@/components/PlantingForm";
 import type { FormState } from "@/lib/form-state";
 
 // next/link needs the Next.js router; a plain anchor is enough here.
@@ -41,7 +41,7 @@ const blank: PlantingValues = {
   notes: "",
 };
 
-function renderForm(initial: Partial<PlantingValues> = {}, result: FormState = {}) {
+function renderForm(initial: Partial<PlantingValues> = {}, result: FormState = {}, photo: CurrentPhoto | null = null) {
   const action = vi.fn(async (...args: [FormState, FormData]) => (args && result));
   render(
     <PlantingForm
@@ -49,6 +49,7 @@ function renderForm(initial: Partial<PlantingValues> = {}, result: FormState = {
       beds={beds}
       suggestions={suggestions}
       initial={{ ...blank, ...initial }}
+      photo={photo}
       submitLabel="Save planting"
       cancelHref="/beds/4"
     />,
@@ -131,6 +132,48 @@ describe("PlantingForm", () => {
       quantity: "1",
       source: "Fred Meyer",
     });
+  });
+
+  it("previews a chosen tag photo and submits it with the planting", async () => {
+    // jsdom has no object URLs for files.
+    URL.createObjectURL = vi.fn(() => "blob:tag-photo");
+    URL.revokeObjectURL = vi.fn();
+    const { action, user } = renderForm({ flower: "Zinnia" });
+
+    await user.upload(screen.getByLabelText("Take or upload photo"), new File(["jpeg"], "tag.jpg", { type: "image/jpeg" }));
+
+    expect(screen.getByRole("img", { name: "Chosen photo" }).getAttribute("src")).toBe("blob:tag-photo");
+    await user.click(screen.getByRole("button", { name: "Save planting" }));
+    expect(action).toHaveBeenCalledTimes(1);
+    // jsdom's FormData leaves out files chosen with user-event; the end-to-end test checks the
+    // upload itself.
+    expect(action.mock.calls[0][1].get("photo_taken_on")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("clears a chosen file that is not a JPEG, PNG, or WebP photo, with a message", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:notes");
+    renderForm({ flower: "Zinnia" });
+    // The file picker offers only photos, but a file of another type can still be chosen.
+    const user = userEvent.setup({ applyAccept: false });
+    const input = screen.getByLabelText("Take or upload photo");
+
+    await user.upload(input, new File(["text"], "notes.txt", { type: "text/plain" }));
+
+    expect(screen.getByText("Choose a JPEG, PNG, or WebP photo.")).toBeTruthy();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(screen.queryByRole("img", { name: "Chosen photo" })).toBeNull();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("shows the current photo when editing and offers to remove it", async () => {
+    const { action, user } = renderForm({ flower: "Zinnia" }, {}, { url: "/photos/tag.jpg", added: "May 18, 2026" });
+
+    expect(screen.getByRole("img", { name: "Current tag photo" }).getAttribute("src")).toBe("/photos/tag.jpg");
+    expect(screen.getByText("Added May 18, 2026")).toBeTruthy();
+    await user.click(screen.getByRole("checkbox", { name: "Remove photo" }));
+    expect(screen.queryByRole("img", { name: "Current tag photo" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save planting" }));
+    expect(action.mock.calls[0][1].get("remove_tag_photo")).toBe("on");
   });
 
   it("shows an error the server returns", async () => {

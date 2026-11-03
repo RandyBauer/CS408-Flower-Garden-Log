@@ -101,6 +101,54 @@ export function validatePlanting(input: FormInput): Validated<PlantingInput> {
   };
 }
 
+// Tag photo limits. The server also decodes the file and rejects anything that is not one of
+// these formats, whatever type the browser reported.
+export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+export interface TagPhotoInput {
+  // A new photo to attach, replacing any photo the planting has.
+  file: File | null;
+  // Remove the current photo. Ignored when a new photo is chosen.
+  remove: boolean;
+  // The gardener's date when the photo was chosen, sent by the form.
+  takenOn: string | null;
+}
+
+// Checks a chosen photo's type and size. The planting form runs it as soon as a file is chosen.
+export function photoFileError(file: File): string | undefined {
+  // Some browsers report no type at all; the server's decode check still applies.
+  if (file.type && !PHOTO_TYPES.includes(file.type)) return "Choose a JPEG, PNG, or WebP photo.";
+  if (file.size > MAX_PHOTO_BYTES) return "Choose a photo smaller than 10 MB.";
+  return undefined;
+}
+
+// The tag photo fields of the planting form.
+export function validateTagPhoto(input: FormInput): Validated<TagPhotoInput> {
+  const errors: FieldErrors = {};
+  const value = input instanceof FormData ? input.get("tag_photo") : null;
+  // A file input with nothing chosen submits an empty file.
+  const file = value instanceof File && value.size > 0 ? value : null;
+  const takenOn = text(input, "photo_taken_on");
+
+  const fileError = file && photoFileError(file);
+  if (fileError) errors.tag_photo = fileError;
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return {
+    ok: true,
+    value: { file, remove: text(input, "remove_tag_photo") === "on", takenOn: isIsoDate(takenOn) ? takenOn : null },
+  };
+}
+
+// The whole planting form: the planting's fields and its tag photo.
+export function validatePlantingForm(input: FormInput): Validated<{ planting: PlantingInput; photo: TagPhotoInput }> {
+  const planting = validatePlanting(input);
+  const photo = validateTagPhoto(input);
+  if (planting.ok && photo.ok) return { ok: true, value: { planting: planting.value, photo: photo.value } };
+  return { ok: false, errors: { ...(planting.ok ? {} : planting.errors), ...(photo.ok ? {} : photo.errors) } };
+}
+
 export interface EndInput {
   removedOn: string;
   verdict: Verdict | null;

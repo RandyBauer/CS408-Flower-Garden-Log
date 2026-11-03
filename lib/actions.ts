@@ -5,9 +5,17 @@ import { redirect } from "next/navigation";
 import { checkPassword } from "./accounts";
 import { getDb } from "./db";
 import type { FormState } from "./form-state";
-import { createPlanting, deletePlanting, endPlanting, updatePlant, updatePlanting } from "./plantings";
+import { deletePhotoFiles, storePhoto } from "./photos";
+import {
+  createPlanting,
+  deletePlanting,
+  endPlanting,
+  updatePlant,
+  updatePlanting,
+  type TagPhotoChange,
+} from "./plantings";
 import { endSession, requireGardener, safeNextPath, startSession } from "./session";
-import { validateBed, validateEnd, validatePlant, validatePlanting, validateZone } from "./validation";
+import { validateBed, validateEnd, validatePlant, validatePlantingForm, validateZone } from "./validation";
 import { createBed, createZone, deleteBed, deleteZone, updateBed, updateZone } from "./zones";
 
 // Server actions for every form. Each one checks the session first, validates the form with the
@@ -37,20 +45,31 @@ export async function signOut() {
 
 // --- Plantings ---
 
+// The tag photo is resized and written to disk first, so a photo that cannot be read is reported
+// before anything is saved. If the planting then fails to save, the new photo's files are removed.
 export async function savePlanting(id: number | null, _prev: FormState, form: FormData): Promise<FormState> {
   await requireGardener();
-  const result = validatePlanting(form);
+  const result = validatePlantingForm(form);
   if (!result.ok) return { fieldErrors: result.errors };
+  const { planting, photo } = result.value;
+
+  let tagPhoto: TagPhotoChange = photo.remove ? "remove" : null;
+  if (photo.file) {
+    const storagePath = await storePhoto(Buffer.from(await photo.file.arrayBuffer()));
+    if (!storagePath) {
+      return { fieldErrors: { tag_photo: "That file could not be read as a photo. Choose a JPEG, PNG, or WebP photo." } };
+    }
+    tagPhoto = { storagePath, takenOn: photo.takenOn };
+  }
+
   const db = getDb();
-  if (id === null) {
-    const created = createPlanting(db, result.value);
-    if (!created.ok) return { error: created.error };
-  } else {
-    const updated = updatePlanting(db, id, result.value);
-    if (!updated.ok) return { error: updated.error };
+  const saved = id === null ? createPlanting(db, planting, tagPhoto) : updatePlanting(db, id, planting, tagPhoto);
+  if (!saved.ok) {
+    if (tagPhoto && tagPhoto !== "remove") deletePhotoFiles([tagPhoto.storagePath]);
+    return { error: saved.error };
   }
   refreshPages();
-  redirect(`/beds/${result.value.bedId}`);
+  redirect(`/beds/${planting.bedId}`);
 }
 
 export async function endPlantingAction(id: number, bedId: number, _prev: FormState, form: FormData): Promise<FormState> {
