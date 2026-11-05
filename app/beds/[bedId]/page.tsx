@@ -7,7 +7,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { TagPhotoThumb } from "@/components/TagPhoto";
 import { primaryButton, secondaryButton } from "@/components/styles";
 import { formatDate, parseId, plantName } from "@/lib/format";
-import { getBed, listCurrentPlantings, listPastPlantings } from "@/lib/garden";
+import { getBed, listCurrentPlantings, listPastPlantings, type Planting } from "@/lib/garden";
 import { groupByYear } from "@/lib/history";
 import { requireGardener } from "@/lib/session";
 
@@ -32,6 +32,19 @@ const table =
   "mt-3 w-full border-collapse overflow-hidden rounded-md border border-stone-300 bg-white text-left text-sm";
 
 const editLink = `${secondaryButton} !px-3 !py-1`;
+
+// A transplant links back to the starter it came from, in the Grow rack page's Transplanted list.
+function RackOrigin({ planting }: { planting: Planting }) {
+  if (!planting.fromPlantingId) return null;
+  return (
+    <Link
+      href={`/rack?starter=${planting.fromPlantingId}#starter-${planting.fromPlantingId}`}
+      className="block text-xs text-emerald-800 hover:underline"
+    >
+      {planting.fromPlantedOn ? `Started ${formatDate(planting.fromPlantedOn)} on the grow rack` : "From the grow rack"}
+    </Link>
+  );
+}
 
 async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
   await requireGardener();
@@ -102,12 +115,24 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                   <td className={td}>{formatDate(planting.plantedOn)}</td>
                   <td className={td}>
                     {planting.source}
+                    <RackOrigin planting={planting} />
                     {planting.notes && <span className="block text-xs text-stone-500">{planting.notes}</span>}
                   </td>
                   <td className={`${td} text-right`}>
-                    <Link href={`/plantings/${planting.id}/edit`} className={editLink} aria-label={`Edit ${plantName(planting)}`}>
-                      Edit
-                    </Link>
+                    <div className="flex justify-end gap-2">
+                      {bed.kind === "rack" && (
+                        <Link
+                          href={`/rack?transplant=${planting.id}#transplant`}
+                          className={editLink}
+                          aria-label={`Transplant ${plantName(planting)}`}
+                        >
+                          Transplant
+                        </Link>
+                      )}
+                      <Link href={`/plantings/${planting.id}/edit`} className={editLink} aria-label={`Edit ${plantName(planting)}`}>
+                        Edit
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -154,7 +179,10 @@ async function BedDetail({ params }: { params: Promise<{ bedId: string }> }) {
                       {plantName(planting)}
                       {planting.quantity > 1 && ` ×${planting.quantity}`}
                     </td>
-                    <td className={td}>{planting.source}</td>
+                    <td className={td}>
+                      {planting.source}
+                      <RackOrigin planting={planting} />
+                    </td>
                     <td className={td}>{formatDate(planting.plantedOn)}</td>
                     <td className={td}>{planting.removedOn && formatDate(planting.removedOn)}</td>
                     <td className={td}>

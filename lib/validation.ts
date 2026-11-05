@@ -17,6 +17,10 @@ function text(input: FormInput, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function has(input: FormInput, name: string): boolean {
+  return input instanceof FormData ? input.has(name) : input[name] !== undefined;
+}
+
 const MAX_NAME = 80;
 const MAX_NOTE = 500;
 
@@ -172,6 +176,61 @@ export function validateEnd(input: FormInput): Validated<EndInput> {
     ok: true,
     value: { removedOn, verdict: (verdict || null) as Verdict | null, verdictNote: verdictNote || null },
   };
+}
+
+export const MAX_TRANSPLANT_BEDS = 10;
+
+export interface TransplantInput {
+  transplantedOn: string;
+  beds: { bedId: number; quantity: number }[];
+}
+
+// The starter being transplanted, for the checks that depend on it.
+export interface StarterFacts {
+  plantedOn: string;
+  quantity: number;
+}
+
+export function tooManyMessage(started: number): string {
+  return `Only ${started} ${started === 1 ? "was" : "were"} started. Transplant ${started} or fewer in total.`;
+}
+
+// The transplant form on the Grow rack page: a date, and one row per bed named to_bed_0 and
+// quantity_0, to_bed_1 and quantity_1, and so on with no gaps. Given the starter, it also checks
+// the date against the day it was started and the total against how many were started; the
+// server checks both again against the database.
+export function validateTransplant(input: FormInput, starter?: StarterFacts): Validated<TransplantInput> {
+  const errors: FieldErrors = {};
+  const transplantedOn = text(input, "transplanted_on");
+
+  if (!transplantedOn) errors.transplanted_on = "Enter the date transplanted.";
+  else if (!isIsoDate(transplantedOn)) errors.transplanted_on = "Enter a real date.";
+  else if (starter && transplantedOn < starter.plantedOn) {
+    errors.transplanted_on = "The transplant date cannot be before the starter was started.";
+  }
+
+  const beds: TransplantInput["beds"] = [];
+  const chosen = new Set<string>();
+  // Row 0 is checked even when it is missing, so a form with no rows asks for a bed.
+  for (let i = 0; i < MAX_TRANSPLANT_BEDS && (i === 0 || has(input, `to_bed_${i}`)); i++) {
+    const bedId = text(input, `to_bed_${i}`);
+    const quantity = text(input, `quantity_${i}`);
+    if (!/^[1-9]\d*$/.test(bedId)) errors[`to_bed_${i}`] = "Choose a bed.";
+    else if (chosen.has(bedId)) errors[`to_bed_${i}`] = "This bed is already chosen above.";
+    chosen.add(bedId);
+    if (!/^\d+$/.test(quantity) || Number(quantity) < 1 || Number(quantity) > 9999) {
+      errors[`quantity_${i}`] = "Enter a whole number from 1 to 9999.";
+    }
+    beds.push({ bedId: Number(bedId), quantity: Number(quantity) });
+  }
+
+  const total = beds.reduce((sum, bed) => sum + bed.quantity, 0);
+  if (starter && total > starter.quantity && !Object.keys(errors).some((key) => key.startsWith("quantity_"))) {
+    errors.total = tooManyMessage(starter.quantity);
+  }
+
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  return { ok: true, value: { transplantedOn, beds } };
 }
 
 export interface ZoneInput {

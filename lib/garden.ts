@@ -58,6 +58,9 @@ export interface Planting {
   // The tag photo's photos.storage_path and date, or null when there is none.
   tagPhoto: string | null;
   tagPhotoTakenOn: string | null;
+  // For a transplant: the rack planting it came from, and the day that starter was started.
+  fromPlantingId: number | null;
+  fromPlantedOn: string | null;
 }
 
 export interface BedWithPlantings extends Bed {
@@ -71,7 +74,8 @@ const BED_COLUMNS = `b.id, b.zone_id AS zoneId, z.name AS zoneName, b.name, b.ki
 const PLANTING_COLUMNS = `p.id, p.plant_id AS plantId, p.bed_id AS bedId, b.zone_id AS zoneId, b.name AS bedName, pl.flower, pl.variety,
   pl.color, pl.lifecycle, p.planted_on AS plantedOn, p.removed_on AS removedOn, p.quantity,
   p.source, p.notes, p.verdict, p.verdict_note AS verdictNote,
-  ph.storage_path AS tagPhoto, ph.taken_on AS tagPhotoTakenOn`;
+  ph.storage_path AS tagPhoto, ph.taken_on AS tagPhotoTakenOn, p.from_planting_id AS fromPlantingId,
+  (SELECT planted_on FROM plantings WHERE id = p.from_planting_id) AS fromPlantedOn`;
 
 // A planting has at most one tag photo (a unique index), so the photo join adds no rows.
 const PLANTING_FROM = `plantings p
@@ -180,15 +184,79 @@ export interface BedOption {
   zoneName: string;
 }
 
-// Every bed, grouped by zone in display order, for the planting form's bed list.
-export async function listBedOptions(): Promise<BedOption[]> {
+// Every bed, or every bed of one kind, grouped by zone in display order, for the bed lists on the
+// planting and transplant forms.
+export async function listBedOptions(kind?: BedKind): Promise<BedOption[]> {
   await connection();
   return getDb()
     .prepare(
       `SELECT b.id, b.name, z.name AS zoneName FROM beds b JOIN zones z ON z.id = b.zone_id
+      WHERE ? IS NULL OR b.kind = ?
       ORDER BY z.sort_order, z.name, b.name`,
     )
-    .all() as BedOption[];
+    .all(kind ?? null, kind ?? null) as BedOption[];
+}
+
+// --- Grow rack ---
+
+export interface RackBed {
+  id: number;
+  name: string;
+}
+
+export async function listRacks(): Promise<RackBed[]> {
+  await connection();
+  return getDb().prepare("SELECT id, name FROM beds WHERE kind = 'rack' ORDER BY name").all() as RackBed[];
+}
+
+// Starters: plantings now on a grow rack, oldest first.
+export async function listStarters(): Promise<Planting[]> {
+  await connection();
+  return getDb()
+    .prepare(
+      `SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM}
+      WHERE b.kind = 'rack' AND p.removed_on IS NULL
+      ORDER BY p.planted_on, pl.flower COLLATE NOCASE, p.id`,
+    )
+    .all() as Planting[];
+}
+
+export interface Transplant {
+  id: number;
+  bedId: number;
+  bedName: string;
+  quantity: number;
+}
+
+export interface TransplantedStarter extends Planting {
+  transplants: Transplant[];
+}
+
+// Starters that were transplanted, most recent first, each with the plantings it became.
+export async function listTransplanted(): Promise<TransplantedStarter[]> {
+  await connection();
+  const db = getDb();
+  const starters = db
+    .prepare(
+      `SELECT ${PLANTING_COLUMNS} FROM ${PLANTING_FROM}
+      WHERE EXISTS (SELECT 1 FROM plantings t WHERE t.from_planting_id = p.id)
+      ORDER BY p.removed_on DESC, p.id DESC`,
+    )
+    .all() as Planting[];
+  const transplants = db
+    .prepare(
+      `SELECT t.id, t.from_planting_id AS fromPlantingId, t.bed_id AS bedId, b.name AS bedName, t.quantity
+      FROM plantings t JOIN beds b ON b.id = t.bed_id
+      WHERE t.from_planting_id IS NOT NULL
+      ORDER BY t.id`,
+    )
+    .all() as (Transplant & { fromPlantingId: number })[];
+  return starters.map((starter) => ({
+    ...starter,
+    transplants: transplants
+      .filter((transplant) => transplant.fromPlantingId === starter.id)
+      .map(({ id, bedId, bedName, quantity }) => ({ id, bedId, bedName, quantity })),
+  }));
 }
 
 export interface ZoneOption {

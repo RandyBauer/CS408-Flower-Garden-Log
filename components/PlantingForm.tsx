@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FormState } from "@/lib/form-state";
 import { PHOTO_TYPES, photoFileError, validatePlantingForm } from "@/lib/validation";
-import { Field, FormError, fieldProps, useFormAction } from "./forms";
+import { Field, FormError, fieldProps, today, useFormAction } from "./forms";
 import { primaryButton, secondaryButton } from "./styles";
 
 export interface PlantingValues {
@@ -36,13 +36,6 @@ export interface PlantingFormProps {
   photo?: CurrentPhoto | null;
   submitLabel: string;
   cancelHref: string;
-}
-
-// Today's date in the gardener's own time zone, as YYYY-MM-DD.
-function today(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export function PlantingForm({ action, beds, suggestions, initial, photo, submitLabel, cancelHref }: PlantingFormProps) {

@@ -10,6 +10,13 @@ export const sections = [
     description: "Areas of the garden, their beds, and what is planted in each.",
   },
   {
+    href: "/rack",
+    label: "Grow rack",
+    navLabel: "Grow rack",
+    paths: ["/rack"],
+    description: "Starters under the grow lights, and transplanting them to beds.",
+  },
+  {
     href: "/plants",
     label: "Plant library",
     navLabel: "Library",

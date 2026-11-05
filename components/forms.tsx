@@ -14,6 +14,14 @@ import { dangerButton, inputClass } from "./styles";
 
 // Shared pieces for the gardener's forms.
 
+// Today's date in the gardener's own time zone, as YYYY-MM-DD. Date fields default to it in the
+// browser, where the gardener's date is known.
+export function today(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 type FormAction = (prev: FormState, form: FormData) => Promise<FormState>;
 
 // False on the server and while the page hydrates, true once React handles events. Forms keep

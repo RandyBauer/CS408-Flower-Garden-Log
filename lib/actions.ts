@@ -10,12 +10,20 @@ import {
   createPlanting,
   deletePlanting,
   endPlanting,
+  transplantStarter,
   updatePlant,
   updatePlanting,
   type TagPhotoChange,
 } from "./plantings";
 import { endSession, requireGardener, safeNextPath, startSession } from "./session";
-import { validateBed, validateEnd, validatePlant, validatePlantingForm, validateZone } from "./validation";
+import {
+  validateBed,
+  validateEnd,
+  validatePlant,
+  validatePlantingForm,
+  validateTransplant,
+  validateZone,
+} from "./validation";
 import { createBed, createZone, deleteBed, deleteZone, updateBed, updateZone } from "./zones";
 
 // Server actions for every form. Each one checks the session first, validates the form with the
@@ -88,6 +96,19 @@ export async function deletePlantingAction(id: number, bedId: number): Promise<F
   if (!deleted.ok) return { error: deleted.error };
   refreshPages();
   redirect(`/beds/${bedId}`);
+}
+
+// --- Grow rack ---
+
+// Returns to the Grow rack page with the starter marked in its Transplanted list.
+export async function transplantAction(id: number, _prev: FormState, form: FormData): Promise<FormState> {
+  await requireGardener();
+  const result = validateTransplant(form);
+  if (!result.ok) return { fieldErrors: result.errors };
+  const transplanted = transplantStarter(getDb(), id, result.value);
+  if (!transplanted.ok) return { error: transplanted.error };
+  refreshPages();
+  redirect(`/rack?starter=${id}#starter-${id}`);
 }
 
 // --- Plant library ---

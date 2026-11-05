@@ -103,9 +103,9 @@ const garden: SampleZone[] = [
         plantings: [
           { plant: "sarahBernhardt", planted: "2021-05-01", quantity: 1, source: "Neighbor division" },
           { plant: "profusionOrange", planted: "2026-05-18", quantity: 12, source: "Fred Meyer" },
-          { plant: "victoriaBlue", planted: "2026-05-18", quantity: 8, source: "Grow rack", from: "salvia2026" },
+          { plant: "victoriaBlue", planted: "2026-05-18", quantity: 8, source: "grown from seed", from: "salvia2026" },
           { plant: "wavePurple", planted: "2025-05-17", removed: "2025-10-04", quantity: 10, source: "Fred Meyer", verdict: "again" },
-          { plant: "rocketMix", planted: "2025-05-17", removed: "2025-10-04", quantity: 6, source: "Grow rack", from: "snapdragon2025", verdict: "maybe", verdictNote: "leggy by August" },
+          { plant: "rocketMix", planted: "2025-05-17", removed: "2025-10-04", quantity: 6, source: "grown from seed", from: "snapdragon2025", verdict: "maybe", verdictNote: "leggy by August" },
           { plant: "durangoYellow", planted: "2024-05-18", removed: "2024-10-12", quantity: 12, source: "Fred Meyer", verdict: "no" },
         ],
       },

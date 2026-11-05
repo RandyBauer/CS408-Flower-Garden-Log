@@ -95,8 +95,8 @@ file.
 
 | Command | Tool | Covers |
 | --- | --- | --- |
-| `npm test` | Vitest | Unit tests: migrations, schema constraints, and the sample garden; planting, zone, and bed validation; ending versus deleting a planting; the plant library; zone and bed delete rules; passwords and sessions; the search query builder for each filter; which years a planting was in the ground, checked against the search year filter; photo resizing, rotation, and metadata removal; attaching, replacing, and removing tag photos. Each test uses a temporary database. Component tests (React Testing Library): the planting form rejects invalid entries and files that are not photos in the browser and submits valid ones; the search form. |
-| `npm run test:e2e` | Playwright | Sign-in, wrong password, sign-out, and signed-out redirects; creating, editing, ending, and deleting a planting; an invalid planting rejected; creating and deleting a zone and bed; home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids show Page not found; `/api/health`; example searches and the search form; the plant library and plant detail; attaching a 5 MB tag photo and finding it, resized, in the bed's history; replacing and removing a tag photo; a file that is not a photo rejected. |
+| `npm test` | Vitest | Unit tests: migrations, schema constraints, and the sample garden; planting, zone, and bed validation; ending versus deleting a planting; the plant library; zone and bed delete rules; passwords and sessions; the search query builder for each filter; which years a planting was in the ground, checked against the search year filter; photo resizing, rotation, and metadata removal; attaching, replacing, and removing tag photos; transplant rules: one starter into several outdoor beds, each linked back to it, and the checks on its date, total, source planting, and beds. Each test uses a temporary database. Component tests (React Testing Library): the planting form rejects invalid entries and files that are not photos in the browser and submits valid ones; the search form. |
+| `npm run test:e2e` | Playwright | Sign-in, wrong password, sign-out, and signed-out redirects; creating, editing, ending, and deleting a planting; an invalid planting rejected; creating and deleting a zone and bed; home page links reach every section; zones, zone detail, and bed detail show the sample garden; unknown ids show Page not found; `/api/health`; example searches and the search form; the plant library and plant detail; attaching a 5 MB tag photo and finding it, resized, in the bed's history; replacing and removing a tag photo; a file that is not a photo rejected; transplanting one starter into two beds and following each bed's link back to the rack planting; a transplant that breaks a rule rejected. |
 
 `npm run test:e2e` builds the application and runs it on port 3100 against `data/e2e.db` and the
 photo folder `data/e2e-uploads`, which are reset to the sample garden and the demo account before
@@ -115,6 +115,7 @@ each run. Install the browser once first: `npx playwright install chromium`.
 | `/beds/<id>/edit` | Edit a bed or move it to another zone |
 | `/plantings/new?bed=<id>` | Add a planting, with an optional tag photo |
 | `/plantings/<id>/edit` | Edit, end, or delete a planting; attach, replace, or remove its tag photo |
+| `/rack` | Grow rack: starters on the rack, the transplant form, and starters already transplanted with the beds they went to |
 | `/plants` | Plant library: each flower, variety, and color recorded, with seasons and verdicts |
 | `/plants/<id>` | Plant detail: every planting of one library entry; rename the entry |
 | `/search` | Search plantings by any combination of filters; example searches when no filter is set |
@@ -134,6 +135,15 @@ or deleting its planting, deletes both files. Set `UPLOADS_DIR` to use another f
 
 The bed page lists past plantings under each year they were in the ground, the same rule the
 search page's year filter uses. A planting without a photo shows a swatch of its recorded color.
+
+## Grow rack
+
+A grow rack is a bed of kind Grow rack, and a starter is a planting in it. Transplanting a starter
+ends its rack planting on the transplant date and creates a planting in each chosen outdoor bed,
+with the same flower, variety, color, and source, and `from_planting_id` set to the starter. The
+total transplanted cannot be more than the number started; any left over end with the rack
+planting. The date cannot be before the starter was started. Each transplant's row on its bed page
+links back to the starter in the Grow rack page's Transplanted list.
 
 ## Sign-in
 

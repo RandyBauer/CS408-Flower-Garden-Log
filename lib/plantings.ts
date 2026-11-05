@@ -1,6 +1,6 @@
 import type { Db } from "./db";
 import { deletePhotoFiles } from "./photos";
-import type { EndInput, PlantInput, PlantingInput } from "./validation";
+import { tooManyMessage, type EndInput, type PlantInput, type PlantingInput, type TransplantInput } from "./validation";
 
 // Writes for plantings. Each function takes the database so the unit tests can pass a
 // temporary one. A planting is ended by setting its removal date, which keeps it in the bed's
@@ -164,6 +164,56 @@ export function endPlanting(db: Db, id: number, input: EndInput): Result {
     id,
   );
   return { ok: true };
+}
+
+// Transplants a starter from a grow rack into one or more outdoor beds. The rack planting ends on
+// the transplant date. Each bed gets a new planting of the same library entry, planted that day,
+// with the starter's source, and linked back to the starter by from_planting_id. Fewer plants than
+// were started may be transplanted; the rest end with the rack planting.
+export function transplantStarter(
+  db: Db,
+  id: number,
+  input: TransplantInput,
+): { ok: true; ids: number[] } | { ok: false; error: string } {
+  const starter = db
+    .prepare(
+      `SELECT p.plant_id AS plantId, p.planted_on AS plantedOn, p.removed_on AS removedOn, p.quantity,
+        p.source, b.kind
+      FROM plantings p JOIN beds b ON b.id = p.bed_id WHERE p.id = ?`,
+    )
+    .get(id) as
+    | { plantId: number; plantedOn: string; removedOn: string | null; quantity: number; source: string | null; kind: string }
+    | undefined;
+  if (!starter) return { ok: false, error: "That starter no longer exists." };
+  if (starter.kind !== "rack") return { ok: false, error: "Only a planting on a grow rack can be transplanted." };
+  if (starter.removedOn !== null) return { ok: false, error: "This starter has already been transplanted or ended." };
+  if (input.transplantedOn < starter.plantedOn) {
+    return { ok: false, error: "The transplant date cannot be before the starter was started." };
+  }
+  if (input.beds.length === 0) return { ok: false, error: "Choose at least one bed." };
+  if (new Set(input.beds.map((bed) => bed.bedId)).size < input.beds.length) {
+    return { ok: false, error: "Choose each bed only once." };
+  }
+  const total = input.beds.reduce((sum, bed) => sum + bed.quantity, 0);
+  if (total > starter.quantity) return { ok: false, error: tooManyMessage(starter.quantity) };
+  const bedKind = db.prepare("SELECT kind FROM beds WHERE id = ?").pluck();
+  for (const { bedId } of input.beds) {
+    const kind = bedKind.get(bedId) as string | undefined;
+    if (!kind) return { ok: false, error: "That bed no longer exists." };
+    if (kind !== "outdoor") return { ok: false, error: "Transplant to outdoor beds, not to a grow rack." };
+  }
+
+  const insert = db.prepare(
+    `INSERT INTO plantings (bed_id, plant_id, planted_on, quantity, source, from_planting_id)
+    VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  const ids = db.transaction(() => {
+    db.prepare("UPDATE plantings SET removed_on = ? WHERE id = ?").run(input.transplantedOn, id);
+    return input.beds.map(({ bedId, quantity }) =>
+      Number(insert.run(bedId, starter.plantId, input.transplantedOn, quantity, starter.source, id).lastInsertRowid),
+    );
+  })();
+  return { ok: true, ids };
 }
 
 // Deletes a planting permanently, with its photos and their files. A transplant that came from it
